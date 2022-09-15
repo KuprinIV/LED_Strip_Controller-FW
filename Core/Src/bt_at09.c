@@ -1,33 +1,45 @@
 #include "bt_at09.h"
+#include "queue.h"
+#include "main.h"
+#include "ws2812b.h"
 #include <string.h>
 
 extern UART_HandleTypeDef huart1;
 
-__IO ITStatus isUartReady = RESET;
+// driver functions
+static void bt_init();
+static void powerCtrl(uint8_t is_enable);
+static uint8_t isConnected();
+static void sendCommand(const char* command);
 
-uint8_t is_Connected = 0, isLineOK = 0;
-uint8_t dataBuffer[DATA_SIZE] = {0};
-uint8_t* atCmdsReplyBuffer;
+// init driver
+BluetoothDriver bt_drv = {
+		bt_init,
+		powerCtrl,
+		isConnected,
+		sendCommand,
+};
+
+BluetoothDriver* bt05_drv = &bt_drv;
+
+uint8_t is_Connected = 0;
+uint8_t dataBuffer[50] = {0};
 uint8_t dataReceiveMode = 0;
+uint8_t isHardwareCheck = 0;
+uint8_t isConfigurationCheck = 0;
+uint8_t configurationStep = 0;
 
-__IO uint8_t isInputDataReady = 0;
-
-// queue variables
-uint8_t commandsArray[OUEUE_DEPTH][DATA_SIZE];
-uint8_t front = 0;
-uint8_t rear = -1;
-uint8_t itemCount = 0;
-
-void enableConnection()
+void powerCtrl(uint8_t is_enable)
 {
-	GPIOA->BSRR = GPIO_PIN_1; // grant connection
-}
-
-void disableConnection()
-{
-	GPIOA->BSRR = GPIO_PIN_1<<16; // break connection
-	is_Connected = 0;
-	isLineOK = 0;
+	if(is_enable)
+	{
+		GPIOA->BSRR = GPIO_PIN_1; // grant connection
+	}
+	else
+	{
+		GPIOA->BSRR = GPIO_PIN_1<<16; // break connection
+		is_Connected = 0;
+	}
 }
 
 uint8_t isConnected()
@@ -38,55 +50,18 @@ uint8_t isConnected()
 
 void bt_init()
 {
-//	enableConnection();
-	// send AT command
+	powerCtrl(0);
+	HAL_Delay(10);
+	powerCtrl(1);
+	HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dataBuffer, sizeof(dataBuffer)); // start receive data
+	// check UART communication
+	isHardwareCheck = 1;
 	sendCommand("AT\r\n");
-
-	HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dataBuffer, DATA_SIZE); // start receive data
-	atCmdsReplyBuffer = getReply();
-
-	if(strcmp((const char*)atCmdsReplyBuffer, "OK\r\n") == 0){
-		isLineOK = 1;
-	}else{
-		isLineOK = 0;
-	}
-	// init module
-	if(isLineOK){
-		sendCommand("AT+ROLE0\r\n");
-		atCmdsReplyBuffer = getReply();
-
-		sendCommand("AT+NAMELED_Strip_BT\r\n");
-		atCmdsReplyBuffer = getReply();
-
-		sendCommand("AT+RESET\r\n");
-		atCmdsReplyBuffer = getReply();
-
-		dataReceiveMode = 1;
-	}
 }
 
 void sendCommand(const char* command)
 {
-	HAL_UART_Transmit_DMA(&huart1, (uint8_t*)command, strlen(command));
-	while(isUartReady != SET){}
-	isUartReady = RESET;
-}
-
-uint8_t* getReply()
-{
-	volatile uint32_t start_time = HAL_GetTick();
-	volatile uint32_t time = start_time;
-#ifdef IS_DEBUG
-	HAL_Delay(100);
-	return NULL;
-#endif
-	while(!isInputDataReady || (time - start_time < 500)){ // wait reply or timeout elapse
-		time = HAL_GetTick();
-	}
-	if(!isEmpty()){
-		return poll();
-	}
-	return NULL;
+	HAL_UART_Transmit(&huart1, (uint8_t*)command, strlen(command), 1000);
 }
 
 /**
@@ -96,67 +71,128 @@ uint8_t* getReply()
   *         you can add your own implementation.
   * @retval None
   */
-
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-	if(!dataReceiveMode || Size == 19){
-		isInputDataReady = 1;
-		insert(dataBuffer);
-		memset(dataBuffer, 0, sizeof(dataBuffer));
+	if(Size > 0 && strlen((char*)dataBuffer) > 0)
+	{
+		if(isHardwareCheck)
+		{
+			if(strstr((char*)dataBuffer, "OK")) // hardware is ok
+			{
+				isHardwareCheck = 0;
+				isConfigurationCheck = 1;
+				configurationStep = 0;
+				sendCommand("AT+ROLE\r\n");
+			}
+			else
+			{
+				sendCommand("AT\r\n");
+			}
+		}
+		else if(isConfigurationCheck)
+		{
+			switch(configurationStep)
+			{
+				case 0:
+					if(strstr((char*)dataBuffer, "+ROLE=0"))
+					{
+						sendCommand("AT+NAME\r\n");
+						configurationStep += 2;
+					}
+					else
+					{
+						sendCommand("AT+ROLE0\r\n");
+						configurationStep++;
+					}
+					break;
+
+				case 1:
+					if(strstr((char*)dataBuffer, "+ROLE=0"))
+					{
+						sendCommand("AT+NAME\r\n");
+						configurationStep++;
+					}
+					else
+					{
+						isConfigurationCheck = 0;
+						Error_Handler(COLOR_PURPLE);
+					}
+					break;
+
+				case 2:
+					if(strstr((char*)dataBuffer, "+NAME=LED_Strip_BT"))
+					{
+						sendCommand("AT+PIN\r\n");
+						configurationStep += 2;
+					}
+					else
+					{
+						sendCommand("AT+NAMELED_Strip_BT\r\n");
+						configurationStep++;
+					}
+					break;
+
+				case 3:
+					if(strstr((char*)dataBuffer, "+NAME=LED_Strip_BT"))
+					{
+						sendCommand("AT+PIN\r\n");
+						configurationStep++;
+					}
+					else
+					{
+						isConfigurationCheck = 0;
+						Error_Handler(COLOR_OLIVE);
+					}
+					break;
+
+				case 4:
+					if(strstr((char*)dataBuffer, "+PIN=123456"))
+					{
+						sendCommand("AT+RESET\r\n");
+						configurationStep += 2;
+					}
+					else
+					{
+						sendCommand("AT+PIN123456\r\n");
+						configurationStep++;
+					}
+					break;
+
+				case 5:
+					if(strstr((char*)dataBuffer, "+PIN=123456"))
+					{
+						sendCommand("AT+RESET\r\n");
+						configurationStep++;
+					}
+					else
+					{
+						isConfigurationCheck = 0;
+						Error_Handler(COLOR_WHITE);
+					}
+					break;
+
+				case 6:
+					if(strstr((char*)dataBuffer, "OK"))
+					{
+						dataReceiveMode = 1;
+						isConfigurationCheck = 0;
+					}
+					else
+					{
+						Error_Handler(COLOR_CYAN);
+					}
+					break;
+
+				default:
+					Error_Handler(COLOR_BLACK);
+					break;
+			}
+		}
+		else if(dataReceiveMode && Size == 19)
+		{
+			commands_queue->Insert(dataBuffer);
+		}
 	}
-	HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dataBuffer, dataReceiveMode ? 19 : DATA_SIZE);
-}
-
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *UartHandle)
-{
-  /* Set transmission flag: trasfer complete*/
-  isUartReady = SET;
-}
-
-/*
- * command queue realization
- */
-uint8_t* peek() {
-   return commandsArray[front];
-}
-
-uint8_t isEmpty() {
-	uint8_t res = (itemCount == 0) ? 1 : 0;
-	return res;
-}
-
-uint8_t isFull() {
-	uint8_t res = (itemCount == OUEUE_DEPTH) ? 1 : 0;
-   return res;
-}
-
-uint8_t size() {
-   return itemCount;
-}
-
-void insert(uint8_t* data) {
-
-   if(!isFull()) {
-
-      if(rear == OUEUE_DEPTH-1) {
-         rear = -1;
-      }
-
-      memcpy(commandsArray[++rear], data, DATA_SIZE);
-      itemCount++;
-   }
-}
-
-uint8_t* poll() {
-   uint8_t* data = commandsArray[front++];
-
-   if(front == OUEUE_DEPTH) {
-      front = 0;
-   }
-
-   itemCount--;
-
-   isInputDataReady = 0;
-
-   return data;
+	memset(dataBuffer, 0, sizeof(dataBuffer));
+	HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dataBuffer, dataReceiveMode ? 19 : sizeof(dataBuffer));
 }

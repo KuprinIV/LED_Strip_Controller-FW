@@ -51,7 +51,7 @@ extern "C" {
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
-void Error_Handler(void);
+void Error_Handler(uint32_t color);
 
 /* USER CODE BEGIN EFP */
 
@@ -67,5 +67,3 @@ void Error_Handler(void);
 #endif
 
 #endif /* __MAIN_H */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

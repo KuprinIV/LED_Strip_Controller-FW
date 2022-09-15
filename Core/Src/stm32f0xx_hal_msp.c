@@ -243,7 +243,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     hdma_usart1_rx.Init.Priority = DMA_PRIORITY_LOW;
     if (HAL_DMA_Init(&hdma_usart1_rx) != HAL_OK)
     {
-      Error_Handler();
+      Error_Handler(0);
     }
 
     __HAL_LINKDMA(huart,hdmarx,hdma_usart1_rx);
@@ -259,7 +259,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     hdma_usart1_tx.Init.Priority = DMA_PRIORITY_LOW;
     if (HAL_DMA_Init(&hdma_usart1_tx) != HAL_OK)
     {
-      Error_Handler();
+      Error_Handler(0);
     }
 
     __HAL_LINKDMA(huart,hdmatx,hdma_usart1_tx);
@@ -313,4 +313,3 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
 
 /* USER CODE END 1 */
 
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

@@ -1,124 +1,121 @@
 #include "ws2812b.h"
-#include <math.h>
 
 extern SPI_HandleTypeDef hspi1;
 
+// driver functions
+static void setStripColor(uint32_t grb);
+static void setBlinkingStrip(uint32_t grb);
+static void setHSV_StripColor(uint8_t h, uint8_t s, uint8_t v);
+static void setStripPartColor(uint32_t grb, uint8_t part_length);
+static void setStripFourColor(uint32_t* colors4);
+static void setStripTwoColor(uint32_t* colors2, uint8_t part_size);
+static void setHSV_Sequence(uint8_t value);
+static void updateFramebuffer(uint8_t index_offset);
+
+// inner functions
 static uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v);
 static uint32_t RgbToHsv(uint32_t grb);
+static void setLedColorInFrameBuffer(uint8_t led_pos, uint32_t grb_color);
 
-void setStripColor(uint32_t grb)
+// init driver
+LED_StripDriver led_drv = {
+		setStripColor,
+		setBlinkingStrip,
+		setHSV_StripColor,
+		setStripPartColor,
+		setStripFourColor,
+		setStripTwoColor,
+		setHSV_Sequence,
+		updateFramebuffer,
+};
+LED_StripDriver* led_strip_drv = &led_drv;
+
+// init LEDs framebuffer
+uint8_t leds_framebuffer[LEDS_COUNT][24] = {0};
+
+static void setStripColor(uint32_t grb)
 {
 	static uint32_t prev_color;
-	static uint16_t colorData[24] = {0};
-	uint8_t temp = 0;
 
-	// fill color data array
-	if(prev_color != grb){
+	// fill LED framebuffer
+	if(prev_color != grb)
+	{
 		prev_color = grb;
-		for(uint8_t i = 0; i < 24; i++)
+		for(uint8_t i = 0; i < LEDS_COUNT; i++)
 		{
-			temp = (uint8_t)((grb >> (23 - i))&0x01);
-			if(temp){
-				colorData[i] = 0xFF80; // 1 code
-			}else{
-				colorData[i] = 0x7000; // 0 code
-			}
+			setLedColorInFrameBuffer(i, grb);
 		}
-	}
-
-	// send data to strip LED controllers
-	for(uint8_t j = 0; j < LEDS_COUNT; j++){
-		for(uint8_t i = 0; i < 24; i++){
-			SPI1->DR = colorData[i];
-			while(!(SPI1->SR & SPI_SR_TXE)){}
-		}
-	}
-	// add delay >= 50 uS for RET code
-	for(uint8_t i = 0; i < 50; i++){
-		SPI1->DR = 0;
-		while(!(SPI1->SR & SPI_SR_TXE)){}
 	}
 }
 
-void setBlinkingStrip(uint32_t grb)
+static void setBlinkingStrip(uint32_t grb)
 {
 	static uint8_t index, dir;
 	static uint32_t prev_color;
 	static uint32_t hsv;
 
-	if(prev_color != grb){
+	if(prev_color != grb)
+	{
 		prev_color = grb;
 		hsv = RgbToHsv(grb);
 	}
 	setStripColor(HsvToRgb((hsv & 0xFF0000)>>16, (hsv & 0xFF00)>>8, index));
-	if(!dir){
-		if(index == 255){
+	if(!dir)
+	{
+		if(index == 255)
+		{
 			dir = 1;
-		}else{
+		}
+		else
+		{
 			index+=5;
 		}
-	}else{
-		if(index == 0){
+	}
+	else
+	{
+		if(index == 0)
+		{
 			dir = 0;
-		}else{
+		}
+		else
+		{
 			index-=5;
 		}
 	}
 }
 
-void setHSV_StripColor(uint8_t h, uint8_t s, uint8_t v) {
+static void setHSV_StripColor(uint8_t h, uint8_t s, uint8_t v)
+{
 	  setStripColor(HsvToRgb(h, s, v));
 }
 
-void setHSV_Sequence(uint8_t value)
+static void setHSV_Sequence(uint8_t value)
 {
-	static uint32_t colors[LEDS_COUNT] = {0};
 	static uint8_t prev_value;
-	uint16_t colorData[24] = {0};
-	uint8_t temp = 0;
-	// calc LEDs colors
-	if(prev_value != value){
+	uint32_t temp = 0;
+	// fill LED framebuffer
+	if(prev_value != value)
+	{
 		prev_value = value;
-		for(uint8_t i = 0; i < LEDS_COUNT; i++){
-			colors[i] = HsvToRgb((229 + (uint8_t)255.0f/LEDS_COUNT*i) & 0xFF, 255, value);
-		}
-	}
-
-	// send data to strip LED controllers
-	for(uint8_t j = 0; j < LEDS_COUNT; j++){
-		// fill color data array
-		for(uint8_t i = 0; i < 24; i++)
+		for(uint8_t i = 0; i < LEDS_COUNT; i++)
 		{
-			temp = (uint8_t)((colors[j] >> (23 - i))&0x01);
-			if(temp){
-				colorData[i] = 0xFF80; // 1 code
-			}else{
-				colorData[i] = 0x7000; // 0 code
-			}
-			// send data
-			SPI1->DR = colorData[i];
-			while(!(SPI1->SR & SPI_SR_TXE)){}
+			temp = HsvToRgb((229 + (uint8_t)255.0f/LEDS_COUNT*i) & 0xFF, 255, value);
+			setLedColorInFrameBuffer(i, temp);
 		}
-	}
-	// add delay >= 50 uS for RET code
-	for(uint8_t i = 0; i < 50; i++){
-		SPI1->DR = 0;
-		while(!(SPI1->SR & SPI_SR_TXE)){}
 	}
 }
 
-void setStripPartColor(uint32_t grb, uint8_t offset, uint8_t part_length)
+static void setStripPartColor(uint32_t grb, uint8_t part_length)
 {
 	static uint32_t prev_color;
 	static uint32_t hsv_color;
 	static uint8_t delta;
-	static uint32_t color_grades[30] = {0}; // max part length is 30 diodes
 	static uint8_t h = 0, s = 0, v = 0, part_length_prev = 0;
 
-	volatile uint32_t temp_color = 0;
-	uint8_t temp = 0;
+	uint32_t temp_color = 0;
 
-	if(prev_color != grb || part_length != part_length_prev){
+	if(prev_color != grb || part_length != part_length_prev)
+	{
 		prev_color = grb;
 		part_length_prev = part_length;
 		// init value difference and convert rgb to hsv
@@ -128,137 +125,68 @@ void setStripPartColor(uint32_t grb, uint8_t offset, uint8_t part_length)
 		v = hsv_color & 0xFF;
 		delta = (uint8_t)(v/part_length);
 
-		// fill color grades array
-		for(uint8_t i = 0; i < part_length; i++){
-			color_grades[i] = HsvToRgb(h, s, v - (part_length - 1 - i)*delta);
-		}
-	}
-
-	// send data to strip LED controllers
-	for(uint8_t j = 0; j < LEDS_COUNT; j++){
-		if((offset + part_length > LEDS_COUNT) && (j >= 0 && j < offset + part_length - LEDS_COUNT)){
-			temp_color = color_grades[j + LEDS_COUNT - offset];
-			for(uint8_t i = 0; i < 24; i++){
-				temp = (uint8_t)((temp_color >> (23 - i))&0x01);
-				if(temp){
-					SPI1->DR = 0xFF80; // 1 code
-				}else{
-					SPI1->DR = 0x7000; // 0 code
-				}
-				while(!(SPI1->SR & SPI_SR_TXE)){}
+		// fill LED framebuffer
+		for(uint8_t i = 0; i < LEDS_COUNT; i++)
+		{
+			if(i < part_length)
+			{
+				temp_color = HsvToRgb(h, s, v - (part_length - 1 - i)*delta);
+				setLedColorInFrameBuffer(i, temp_color);
 			}
-		}else if(j >= offset && j < offset + part_length){
-			temp_color = color_grades[j-offset];
-			for(uint8_t i = 0; i < 24; i++){
-				temp = (uint8_t)((temp_color >> (23 - i))&0x01);
-				if(temp){
-					SPI1->DR = 0xFF80; // 1 code
-				}else{
-					SPI1->DR = 0x7000; // 0 code
-				}
-				while(!(SPI1->SR & SPI_SR_TXE)){}
-			}
-		}else{
-			for(uint8_t i = 0; i < 24; i++){
-				SPI1->DR = 0x7000; // set "black" color
-				while(!(SPI1->SR & SPI_SR_TXE)){}
+			else
+			{
+				setLedColorInFrameBuffer(i, COLOR_BLACK);
 			}
 		}
-	}
-	// add delay >= 50 uS for RET code
-	for(uint8_t i = 0; i < 50; i++){
-		SPI1->DR = 0;
-		while(!(SPI1->SR & SPI_SR_TXE)){}
 	}
 }
 
-void setStripFourColor(uint32_t* colors4, uint8_t state)
+static void setStripFourColor(uint32_t* colors4)
 {
-	uint16_t colorData[4][24] = {0};
-	uint8_t temp = 0;
-
-	// fill color data array
-	for(uint8_t i = 0; i < 24; i++)
+	// fill LED framebuffer
+	for(uint8_t i = 0; i < LEDS_COUNT; i++)
 	{
-		temp = (uint8_t)((colors4[state & 0x03] >> (23 - i))&0x01);
-		if(temp){
-			colorData[0][i] = 0xFF80; // 1 code
-		}else{
-			colorData[0][i] = 0x7000; // 0 code
-		}
-
-		temp = (uint8_t)((colors4[(state+1) & 0x03] >> (23 - i))&0x01);
-		if(temp){
-			colorData[1][i] = 0xFF80; // 1 code
-		}else{
-			colorData[1][i] = 0x7000; // 0 code
-		}
-
-		temp = (uint8_t)((colors4[(state+2) & 0x03] >> (23 - i))&0x01);
-		if(temp){
-			colorData[2][i] = 0xFF80; // 1 code
-		}else{
-			colorData[2][i] = 0x7000; // 0 code
-		}
-
-		temp = (uint8_t)((colors4[(state+3) & 0x03] >> (23 - i))&0x01);
-		if(temp){
-			colorData[3][i] = 0xFF80; // 1 code
-		}else{
-			colorData[3][i] = 0x7000; // 0 code
-		}
-	}
-
-	// send data to strip LED controllers
-	for(uint8_t j = 0; j < LEDS_COUNT; j++){
-			for(uint8_t i = 0; i < 24; i++){
-				SPI1->DR = colorData[j%4][i];
-				while(!(SPI1->SR & SPI_SR_TXE)){}
-			}
-	}
-	// add delay >= 50 uS for RET code
-	for(uint8_t i = 0; i < 50; i++){
-		SPI1->DR = 0;
-		while(!(SPI1->SR & SPI_SR_TXE)){}
+		setLedColorInFrameBuffer(i, colors4[i%4]);
 	}
 }
 
-void setStripTwoColor(uint32_t* colors2, uint8_t state, uint8_t part_size)
+static void setStripTwoColor(uint32_t* colors2, uint8_t part_size)
 {
-	uint16_t colorData[2][24] = {0};
-	uint8_t temp = 0;
 	uint8_t arrayIndex = 0;
 
-	// fill color data array
-	for(uint8_t i = 0; i < 24; i++)
+	// fill LED framebuffer
+	for(uint8_t i = 0; i < LEDS_COUNT; i++)
 	{
-		temp = (uint8_t)((colors2[state & 0x01] >> (23 - i))&0x01);
-		if(temp){
-			colorData[0][i] = 0xFF80; // 1 code
-		}else{
-			colorData[0][i] = 0x7000; // 0 code
+		if(i > 0 && (i % part_size) == 0)
+		{
+			arrayIndex = (~arrayIndex) & 0x01;
 		}
+		setLedColorInFrameBuffer(i, colors2[arrayIndex]);
+	}
+}
 
-		temp = (uint8_t)((colors2[(state+1) & 0x01] >> (23 - i))&0x01);
-		if(temp){
-			colorData[1][i] = 0xFF80; // 1 code
-		}else{
-			colorData[1][i] = 0x7000; // 0 code
+static void updateFramebuffer(uint8_t index_offset)
+{
+	// send data to strip LED controllers
+	for(uint8_t j = index_offset; j < LEDS_COUNT; j++)
+	{
+		for(uint8_t i = 0; i < 24; i+=2)
+		{
+			SPI1->DR = (uint16_t)((leds_framebuffer[j][i]<<8)|leds_framebuffer[j][i+1]);
+			while(!(SPI1->SR & SPI_SR_TXE)){}
 		}
 	}
-
-	// send data to strip LED controllers
-	for(uint8_t j = 0; j < LEDS_COUNT; j++){
-		if(j % part_size == 0 && j > 0){
-			arrayIndex ^= 0x01;
-		}
-		for(uint8_t i = 0; i < 24; i++){
-			SPI1->DR = colorData[arrayIndex][i];
+	for(uint8_t j = 0; j < index_offset; j++)
+	{
+		for(uint8_t i = 0; i < 24; i+=2)
+		{
+			SPI1->DR = (uint16_t)((leds_framebuffer[j][i]<<8)|leds_framebuffer[j][i+1]);
 			while(!(SPI1->SR & SPI_SR_TXE)){}
 		}
 	}
 	// add delay >= 50 uS for RET code
-	for(uint8_t i = 0; i < 50; i++){
+	for(uint8_t i = 0; i < 50; i++)
+	{
 		SPI1->DR = 0;
 		while(!(SPI1->SR & SPI_SR_TXE)){}
 	}
@@ -268,6 +196,7 @@ static uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v)
 {
     uint32_t grb;
     uint8_t region, remainder, p, q, t;
+    uint16_t rgb_sum = 0;
 
     if (s == 0)
     {
@@ -281,6 +210,12 @@ static uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v)
     p = (v * (255 - s)) >> 8;
     q = (v * (255 - ((s * remainder) >> 8))) >> 8;
     t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
+
+    // add LEDs brightness smoothing
+//    rgb_sum = (uint16_t)(p + q + t);
+//    p = (uint8_t)((uint16_t)(p<<8)/rgb_sum);
+//    q = (uint8_t)((uint16_t)(q<<8)/rgb_sum);
+//    t = (uint8_t)((uint16_t)(t<<8)/rgb_sum);
 
     switch (region)
     {
@@ -339,4 +274,23 @@ static uint32_t RgbToHsv(uint32_t grb)
         h = 171 + 43 * (r - g) / (grbMax - grbMin);
 
     return (h<<16)|(s<<8)|v;
+}
+
+static void setLedColorInFrameBuffer(uint8_t led_pos, uint32_t grb_color)
+{
+	uint8_t temp = 0;
+
+	// fill color data array
+	for(uint8_t i = 0; i < 24; i++)
+	{
+		temp = (uint8_t)((grb_color >> (23 - i))&0x01);
+		if(temp)
+		{
+			leds_framebuffer[led_pos][i] = BIT1; // 1 code
+		}
+		else
+		{
+			leds_framebuffer[led_pos][i] = BIT0; // 0 code
+		}
+	}
 }

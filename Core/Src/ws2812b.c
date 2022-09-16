@@ -10,6 +10,7 @@ static void setStripPartColor(uint32_t grb, uint8_t part_length);
 static void setStripFourColor(uint32_t* colors4);
 static void setStripTwoColor(uint32_t* colors2, uint8_t part_size);
 static void setHSV_Sequence(uint8_t value);
+static void stripPowerOff(void);
 static void updateFramebuffer(uint8_t index_offset);
 
 // inner functions
@@ -26,6 +27,7 @@ LED_StripDriver led_drv = {
 		setStripFourColor,
 		setStripTwoColor,
 		setHSV_Sequence,
+		stripPowerOff,
 		updateFramebuffer,
 };
 LED_StripDriver* led_strip_drv = &led_drv;
@@ -103,6 +105,11 @@ static void setHSV_Sequence(uint8_t value)
 			setLedColorInFrameBuffer(i, temp);
 		}
 	}
+}
+
+static void stripPowerOff(void)
+{
+	setStripColor(COLOR_BLACK);
 }
 
 static void setStripPartColor(uint32_t grb, uint8_t part_length)

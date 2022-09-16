@@ -54,14 +54,15 @@ DMA_HandleTypeDef hdma_usart1_tx;
 /* USER CODE BEGIN PV */
 volatile uint8_t isUpdate = 0;
 volatile uint8_t updateClockDivider = 1;
-effectParamsData effectsArray[7] = {
-		{0, {COLOR_RED, COLOR_YELLOW, COLOR_LIME, COLOR_BLUE}, 0, 0, 0}, 	// four colors effect
-		{1, {COLOR_RED, COLOR_YELLOW, 0, 0}, 0, 0, 1}, 						// two colors effect
-		{2, {0, 0, 0, 0}, 255, 150, 0}, 									// smooth color change effect
-		{3, {COLOR_WHITE, 0, 0, 0}, 0, 0, 0}, 								// constant color effect
-		{4, {COLOR_WHITE, 0, 0, 0}, 0, 0, 0}, 								// blinking color effect
-		{5, {COLOR_WHITE, 0, 0, 0}, 0, 0, 15},								// shift color part effect
-		{6, {0, 0, 0, 0}, 255, 150, 0}										// rainbow effect
+effectParamsData effectsArray[8] = {
+		{0, {0, 0, 0, 0}, 0, 0, 0}, 										// strip power off
+		{1, {COLOR_RED, COLOR_YELLOW, COLOR_LIME, COLOR_BLUE}, 0, 0, 0}, 	// four colors effect
+		{2, {COLOR_RED, COLOR_YELLOW, 0, 0}, 0, 0, 1}, 						// two colors effect
+		{3, {0, 0, 0, 0}, 255, 150, 0}, 									// smooth color change effect
+		{4, {COLOR_WHITE, 0, 0, 0}, 0, 0, 0}, 								// constant color effect
+		{5, {COLOR_WHITE, 0, 0, 0}, 0, 0, 0}, 								// blinking color effect
+		{6, {COLOR_WHITE, 0, 0, 0}, 0, 0, 15},								// shift color part effect
+		{7, {0, 0, 0, 0}, 255, 150, 0}										// rainbow effect
 };
 
 effectParamsData currentEffect;
@@ -168,9 +169,9 @@ int main(void)
 			  isLongPress = 0;
 
 			  longPressEffectCounter++;
-			  if(longPressEffectCounter < 3)  colorCounter = 0; // reset color counter
-			  if(longPressEffectCounter == 2) hue = 0; // reset hue value
-			  if(longPressEffectCounter == 5) shiftOffset = 0; // reset shiftOffset value
+			  if(longPressEffectCounter < 4)  colorCounter = 0; // reset color counter
+			  if(longPressEffectCounter == 3) hue = 0; // reset hue value
+			  if(longPressEffectCounter == 6) shiftOffset = 0; // reset shiftOffset value
 			  if(longPressEffectCounter == EFFECTS_COUNT)
 			  {
 				  longPressEffectCounter = 0;
@@ -189,12 +190,12 @@ int main(void)
 			  else // was short press
 			  {
 				  colorCounter++;
-				  if(longPressEffectCounter > 2) // don't change color counter for 3 first effects
+				  if(longPressEffectCounter > 3) // don't change color counter for 4 first effects
 				  {
 					  colorCounter &= 0x07;
 					  currentEffect.colors[0] = hard_colors[colorCounter];
 				  }
-				  else if(longPressEffectCounter == 1)
+				  else if(longPressEffectCounter == 2)
 				  {
 					  colorCounter &= 0x01;
 					  currentEffect.colors[0] = hard_two_colors[colorCounter][0];
@@ -252,30 +253,31 @@ int main(void)
 			  // select effect
 			  switch(longPressEffectCounter)
 			  {
-				  case 0: // four color blinking
+				  case 1: // four color blinking
 					  shiftOffset = (shiftOffset + 1) & 0x03;
 					  break;
 
-				  case 1: // two color blinking
+				  case 2: // two color blinking
 					  shiftOffset = ((shiftOffset + 1) & 0x01)*currentEffect.sectorSize;
 					  break;
 
-				  case 2: // smooth color changing
+				  case 3: // smooth color changing
 					  led_strip_drv->setHsvStripColor(hue, currentEffect.saturation, currentEffect.value);
 					  hue++;
 					  break;
 
-				  case 3: // constant color
-				  case 6: // rainbow
+				  case 0: // power off
+				  case 4: // constant color
+				  case 7: // rainbow
 				  default:
 					  shiftOffset = 0;
 					  break;
 
-				  case 4: // blinking constant color
+				  case 5: // blinking constant color
 					  led_strip_drv->setBlinkingStrip(currentEffect.colors[0]);
 					  break;
 
-				  case 5: // shifting colored part
+				  case 6: // shifting colored part
 					  if(!isDeviceBusy)
 					  {
 						  if(shiftOffset > 0)
@@ -518,37 +520,41 @@ static void updateCurrentEffect(void)
 {
 	  switch(currentEffect.effectNum)
 	  {
-		  case 0: // four color blinking
+		  case 0: // strip power off
+			  led_strip_drv->stripPowerOff();
+			  break;
+
+		  case 1: // four color blinking
 			  updateClockDivider = 19;
 			  led_strip_drv->setStripFourColor(currentEffect.colors);
 			  break;
 
-		  case 1: // two color blinking
+		  case 2: // two color blinking
 			  updateClockDivider = 19;
 			  led_strip_drv->setStripTwoColor(currentEffect.colors, currentEffect.sectorSize);
 			  break;
 
-		  case 2: // smooth color changing
+		  case 3: // smooth color changing
 			  updateClockDivider = 2;
 			  led_strip_drv->setHsvStripColor(0, currentEffect.saturation, currentEffect.value);
 			  break;
 
-		  case 3: // constant color
+		  case 4: // constant color
 			  updateClockDivider = 19;
 			  led_strip_drv->setStripColor(currentEffect.colors[0]);
 			  break;
 
-		  case 4: // blinking constant color
+		  case 5: // blinking constant color
 			  updateClockDivider = 0;
 			  led_strip_drv->setBlinkingStrip(currentEffect.colors[0]);
 			  break;
 
-		  case 5: // shifting colored part
+		  case 6: // shifting colored part
 			  updateClockDivider = 1;
 			  led_strip_drv->setStripPartColor(currentEffect.colors[0], currentEffect.sectorSize);
 			  break;
 
-		  case 6: // rainbow
+		  case 7: // rainbow
 			  updateClockDivider = 19;
 			  led_strip_drv->setHsvSequence(currentEffect.value);
 			  break;

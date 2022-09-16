@@ -4,7 +4,7 @@
 #include "stm32f0xx_hal.h"
 
 #define LEDS_COUNT 			60
-#define EFFECTS_COUNT		7
+#define EFFECTS_COUNT		8
 #define BIT0				0xC0
 #define BIT1				0xF8
 
@@ -45,6 +45,7 @@ typedef struct
 	void (*setStripFourColor)(uint32_t* colors4);
 	void (*setStripTwoColor)(uint32_t* colors2, uint8_t part_size);
 	void (*setHsvSequence)(uint8_t value);
+	void (*stripPowerOff)(void);
 	void (*updateFramebuffer)(uint8_t index_offset);
 }LED_StripDriver;
 

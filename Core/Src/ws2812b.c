@@ -37,30 +37,20 @@ uint8_t leds_framebuffer[LEDS_COUNT][24] = {0};
 
 static void setStripColor(uint32_t grb)
 {
-	static uint32_t prev_color;
-
 	// fill LED framebuffer
-	if(prev_color != grb)
+	for(uint8_t i = 0; i < LEDS_COUNT; i++)
 	{
-		prev_color = grb;
-		for(uint8_t i = 0; i < LEDS_COUNT; i++)
-		{
-			setLedColorInFrameBuffer(i, grb);
-		}
+		setLedColorInFrameBuffer(i, grb);
 	}
 }
 
 static void setBlinkingStrip(uint32_t grb)
 {
 	static uint8_t index, dir;
-	static uint32_t prev_color;
 	static uint32_t hsv;
 
-	if(prev_color != grb)
-	{
-		prev_color = grb;
-		hsv = RgbToHsv(grb);
-	}
+
+	hsv = RgbToHsv(grb);
 	setStripColor(HsvToRgb((hsv & 0xFF0000)>>16, (hsv & 0xFF00)>>8, index));
 	if(!dir)
 	{
@@ -93,17 +83,12 @@ static void setHSV_StripColor(uint8_t h, uint8_t s, uint8_t v)
 
 static void setHSV_Sequence(uint8_t value)
 {
-	static uint8_t prev_value;
 	uint32_t temp = 0;
 	// fill LED framebuffer
-	if(prev_value != value)
+	for(uint8_t i = 0; i < LEDS_COUNT; i++)
 	{
-		prev_value = value;
-		for(uint8_t i = 0; i < LEDS_COUNT; i++)
-		{
-			temp = HsvToRgb((229 + (uint8_t)255.0f/LEDS_COUNT*i) & 0xFF, 255, value);
-			setLedColorInFrameBuffer(i, temp);
-		}
+		temp = HsvToRgb((229 + (uint8_t)255.0f/LEDS_COUNT*i) & 0xFF, 255, value);
+		setLedColorInFrameBuffer(i, temp);
 	}
 }
 
@@ -114,36 +99,30 @@ static void stripPowerOff(void)
 
 static void setStripPartColor(uint32_t grb, uint8_t part_length)
 {
-	static uint32_t prev_color;
 	static uint32_t hsv_color;
 	static uint8_t delta;
-	static uint8_t h = 0, s = 0, v = 0, part_length_prev = 0;
+	static uint8_t h = 0, s = 0, v = 0;
 
 	uint32_t temp_color = 0;
 
-	if(prev_color != grb || part_length != part_length_prev)
-	{
-		prev_color = grb;
-		part_length_prev = part_length;
-		// init value difference and convert rgb to hsv
-		hsv_color = RgbToHsv(grb);
-		h = (hsv_color>>16) & 0xFF;
-		s = (hsv_color>>8) & 0xFF;
-		v = hsv_color & 0xFF;
-		delta = (uint8_t)(v/part_length);
+	// init value difference and convert rgb to hsv
+	hsv_color = RgbToHsv(grb);
+	h = (hsv_color>>16) & 0xFF;
+	s = (hsv_color>>8) & 0xFF;
+	v = hsv_color & 0xFF;
+	delta = (uint8_t)(v/part_length);
 
-		// fill LED framebuffer
-		for(uint8_t i = 0; i < LEDS_COUNT; i++)
+	// fill LED framebuffer
+	for(uint8_t i = 0; i < LEDS_COUNT; i++)
+	{
+		if(i < part_length)
 		{
-			if(i < part_length)
-			{
-				temp_color = HsvToRgb(h, s, v - (part_length - 1 - i)*delta);
-				setLedColorInFrameBuffer(i, temp_color);
-			}
-			else
-			{
-				setLedColorInFrameBuffer(i, COLOR_BLACK);
-			}
+			temp_color = HsvToRgb(h, s, v - (part_length - 1 - i)*delta);
+			setLedColorInFrameBuffer(i, temp_color);
+		}
+		else
+		{
+			setLedColorInFrameBuffer(i, COLOR_BLACK);
 		}
 	}
 }
@@ -203,8 +182,6 @@ static uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v)
 {
     uint32_t grb;
     uint8_t region, remainder, p, q, t;
-    uint16_t rgb_sum = 0;
-    uint16_t temp = 0;
 
     if (s == 0)
     {
@@ -281,17 +258,6 @@ static uint32_t RgbToHsv(uint32_t grb)
 static void setLedColorInFrameBuffer(uint8_t led_pos, uint32_t grb_color)
 {
 	uint8_t temp = 0;
-
-	// add brightness correction
-	uint8_t g = (grb_color>>16) & 0xFF;
-	uint8_t r = (grb_color>>8) & 0xFF;
-	uint8_t b = grb_color & 0xFF;
-
-	uint16_t g_corr = (uint16_t)g*11/20;
-	g = (uint8_t)(g_corr & 0xFF);
-
-	grb_color = (g<<16)|(r<<8)|b;
-
 	// fill color data array
 	for(uint8_t i = 0; i < 24; i++)
 	{

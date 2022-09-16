@@ -145,161 +145,163 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  //check button
-	  if(!isButtonPrevPressed && ((GPIOA->IDR & GPIO_PIN_6) == 0)) // detect button press event
-	  {
-		  isButtonPrevPressed = 1;
-		  pressTime = HAL_GetTick();
-	  }
-	  if(isButtonPrevPressed && ((GPIOA->IDR & GPIO_PIN_6) == 0)) // count button press duration
-	  {
-		  if((HAL_GetTick() - pressTime > 500) && !isLongPressDetected)
-		  {
-			  isLongPress = 1;
-			  isLongPressDetected = 1;
-		  }
-	  }
-	  // handle long button press
-	  if(isLongPress)
-	  {
-		  isLongPress = 0;
-
-		  longPressEffectCounter++;
-		  if(longPressEffectCounter < 3)  colorCounter = 0; // reset color counter
-		  if(longPressEffectCounter == 2) hue = 0; // reset hue value
-		  if(longPressEffectCounter == 5) shiftOffset = 0; // reset shiftOffset value
-		  if(longPressEffectCounter == EFFECTS_COUNT)
-		  {
-			  longPressEffectCounter = 0;
-		  }
-		  currentEffect = effectsArray[longPressEffectCounter];
-		  updateCurrentEffect();
-		  needToUpdate = 1;
-	  }
-	  if(isButtonPrevPressed && (GPIOA->IDR & GPIO_PIN_6)) // detect button release event
-	  {
-		  isButtonPrevPressed = 0;
-		  if(isLongPressDetected) // was long press
-		  {
-			  isLongPressDetected = 0;
-		  }
-		  else // was short press
-		  {
-			  colorCounter++;
-			  if(longPressEffectCounter > 2) // don't change color counter for 3 first effects
-			  {
-				  colorCounter &= 0x07;
-				  currentEffect.colors[0] = hard_colors[colorCounter];
-			  }
-			  else if(longPressEffectCounter == 1)
-			  {
-				  colorCounter &= 0x01;
-				  currentEffect.colors[0] = hard_two_colors[colorCounter][0];
-				  currentEffect.colors[1] = hard_two_colors[colorCounter][1];
-			  }
-			  updateCurrentEffect();
-			  needToUpdate = 1;
-		  }
-	  }
-	  // check bluetooth BLE input data
-	  if(!commands_queue->IsEmpty() && !isDeviceBusy)
-	  {
-		  commandData = commands_queue->Poll(); // get data from commands queue
-		  if(commandData[0] == 0xAA && commandData[17] == 0x0D && commandData[18] == 0x0A) // effect data report received
-		  {
-			  isDeviceBusy = 1;
-			  longPressEffectCounter = commandData[1];
-			  currentEffect = effectsArray[longPressEffectCounter];
-			  // fill effects arrays
-			  currentEffect.effectNum = commandData[1];
-			  currentEffect.colors[0] = (commandData[2]<<16)|(commandData[3]<<8)|commandData[4];
-			  currentEffect.colors[1] = (commandData[5]<<16)|(commandData[6]<<8)|commandData[7];
-			  currentEffect.colors[2] = (commandData[8]<<16)|(commandData[9]<<8)|commandData[10];
-			  currentEffect.colors[3] = (commandData[11]<<16)|(commandData[12]<<8)|commandData[13];
-			  currentEffect.saturation = commandData[14];
-			  currentEffect.value = commandData[15];
-			  currentEffect.sectorSize = commandData[16];
-			  memset(commandData, 0, DATA_SIZE);
-
-			  if(longPressEffectCounter == 2) hue = 0; // reset hue value
-			  if(longPressEffectCounter == 5) shiftOffset = 0; // reset shiftOffset value
-
-			  updateCurrentEffect();
-			  needToUpdate = 1;
-		  }
-	  }
-	  // check update
-	  if(isUpdate && !isDeviceBusy)
+	  if(isUpdate)
 	  {
 		  isUpdate = 0;
-		  if(clockCounter < updateClockDivider)
+		  //check button
+		  if(!isButtonPrevPressed && ((GPIOA->IDR & GPIO_PIN_6) == 0)) // detect button press event
 		  {
-			  clockCounter++;
+			  isButtonPrevPressed = 1;
+			  pressTime = HAL_GetTick();
 		  }
-		  else
+		  if(isButtonPrevPressed && ((GPIOA->IDR & GPIO_PIN_6) == 0)) // count button press duration
 		  {
-			  clockCounter = 0;
+			  if((HAL_GetTick() - pressTime > 500) && !isLongPressDetected)
+			  {
+				  isLongPress = 1;
+				  isLongPressDetected = 1;
+			  }
+		  }
+		  // handle long button press
+		  if(isLongPress)
+		  {
+			  isLongPress = 0;
+
+			  longPressEffectCounter++;
+			  if(longPressEffectCounter < 3)  colorCounter = 0; // reset color counter
+			  if(longPressEffectCounter == 2) hue = 0; // reset hue value
+			  if(longPressEffectCounter == 5) shiftOffset = 0; // reset shiftOffset value
+			  if(longPressEffectCounter == EFFECTS_COUNT)
+			  {
+				  longPressEffectCounter = 0;
+			  }
+			  currentEffect = effectsArray[longPressEffectCounter];
+			  updateCurrentEffect();
 			  needToUpdate = 1;
 		  }
-	  }
-
-	  // update strip color state
-	  if(needToUpdate)
-	  {
-		  needToUpdate = 0;
-		  // select effect
-		  switch(longPressEffectCounter)
+		  if(isButtonPrevPressed && (GPIOA->IDR & GPIO_PIN_6)) // detect button release event
 		  {
-			  case 0: // four color blinking
-				  shiftOffset = (shiftOffset + 1) & 0x03;
-				  break;
-
-			  case 1: // two color blinking
-				  shiftOffset = ((shiftOffset + 1) & 0x01)*currentEffect.sectorSize;
-				  break;
-
-			  case 2: // smooth color changing
-				  led_strip_drv->setHsvStripColor(hue, currentEffect.saturation, currentEffect.value);
-				  hue++;
-				  break;
-
-			  case 3: // constant color
-			  case 6: // rainbow
-			  default:
-				  shiftOffset = 0;
-				  break;
-
-			  case 4: // blinking constant color
-				  led_strip_drv->setBlinkingStrip(currentEffect.colors[0]);
-				  break;
-
-			  case 5: // shifting colored part
-				  if(!isDeviceBusy)
+			  isButtonPrevPressed = 0;
+			  if(isLongPressDetected) // was long press
+			  {
+				  isLongPressDetected = 0;
+			  }
+			  else // was short press
+			  {
+				  colorCounter++;
+				  if(longPressEffectCounter > 2) // don't change color counter for 3 first effects
 				  {
-					  if(shiftOffset > 0)
-					  {
-						  shiftOffset--;
-					  }
-					  else
-					  {
-						  shiftOffset = LEDS_COUNT-1;
-					  }
+					  colorCounter &= 0x07;
+					  currentEffect.colors[0] = hard_colors[colorCounter];
 				  }
-				  break;
-
+				  else if(longPressEffectCounter == 1)
+				  {
+					  colorCounter &= 0x01;
+					  currentEffect.colors[0] = hard_two_colors[colorCounter][0];
+					  currentEffect.colors[1] = hard_two_colors[colorCounter][1];
+				  }
+				  updateCurrentEffect();
+				  needToUpdate = 1;
+			  }
 		  }
-		  // update framebuffer data
-		  led_strip_drv->updateFramebuffer(shiftOffset);
-
-		  // reset busy state
-		  if(isDeviceBusy)
+		  // check bluetooth BLE input data
+		  if(!commands_queue->IsEmpty() && !isDeviceBusy)
 		  {
-			  isDeviceBusy = 0;
-			  clockCounter = 0;
-			  bt05_drv->SendCommand("Effect set");
+			  commandData = commands_queue->Poll(); // get data from commands queue
+			  if(commandData[0] == 0xAA && commandData[17] == 0x0D && commandData[18] == 0x0A) // effect data report received
+			  {
+				  isDeviceBusy = 1;
+				  longPressEffectCounter = commandData[1];
+				  currentEffect = effectsArray[longPressEffectCounter];
+				  // fill effects arrays
+				  currentEffect.effectNum = commandData[1];
+				  currentEffect.colors[0] = (commandData[2]<<16)|(commandData[3]<<8)|commandData[4];
+				  currentEffect.colors[1] = (commandData[5]<<16)|(commandData[6]<<8)|commandData[7];
+				  currentEffect.colors[2] = (commandData[8]<<16)|(commandData[9]<<8)|commandData[10];
+				  currentEffect.colors[3] = (commandData[11]<<16)|(commandData[12]<<8)|commandData[13];
+				  currentEffect.saturation = commandData[14];
+				  currentEffect.value = commandData[15];
+				  currentEffect.sectorSize = commandData[16];
+				  memset(commandData, 0, DATA_SIZE);
+
+				  if(longPressEffectCounter == 2) hue = 0; // reset hue value
+				  if(longPressEffectCounter == 5) shiftOffset = 0; // reset shiftOffset value
+
+				  updateCurrentEffect();
+				  needToUpdate = 1;
+			  }
+		  }
+		  // check update
+		  if(!isDeviceBusy)
+		  {
+			  if(clockCounter < updateClockDivider)
+			  {
+				  clockCounter++;
+			  }
+			  else
+			  {
+				  clockCounter = 0;
+				  needToUpdate = 1;
+			  }
+		  }
+
+		  // update strip color state
+		  if(needToUpdate)
+		  {
+			  needToUpdate = 0;
+			  // select effect
+			  switch(longPressEffectCounter)
+			  {
+				  case 0: // four color blinking
+					  shiftOffset = (shiftOffset + 1) & 0x03;
+					  break;
+
+				  case 1: // two color blinking
+					  shiftOffset = ((shiftOffset + 1) & 0x01)*currentEffect.sectorSize;
+					  break;
+
+				  case 2: // smooth color changing
+					  led_strip_drv->setHsvStripColor(hue, currentEffect.saturation, currentEffect.value);
+					  hue++;
+					  break;
+
+				  case 3: // constant color
+				  case 6: // rainbow
+				  default:
+					  shiftOffset = 0;
+					  break;
+
+				  case 4: // blinking constant color
+					  led_strip_drv->setBlinkingStrip(currentEffect.colors[0]);
+					  break;
+
+				  case 5: // shifting colored part
+					  if(!isDeviceBusy)
+					  {
+						  if(shiftOffset > 0)
+						  {
+							  shiftOffset--;
+						  }
+						  else
+						  {
+							  shiftOffset = LEDS_COUNT-1;
+						  }
+					  }
+					  break;
+
+			  }
+			  // update framebuffer data
+			  led_strip_drv->updateFramebuffer(shiftOffset);
+
+			  // reset busy state
+			  if(isDeviceBusy)
+			  {
+				  isDeviceBusy = 0;
+				  clockCounter = 0;
+				  bt05_drv->SendCommand("Effect set");
+			  }
 		  }
 	  }
-	  HAL_Delay(10);
   }
   /* USER CODE END 3 */
 }
@@ -325,7 +327,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PREDIV = RCC_PREDIV_DIV1;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
-    Error_Handler(0);
+    Error_Handler();
   }
   /** Initializes the CPU, AHB and APB buses clocks
   */
@@ -337,13 +339,13 @@ void SystemClock_Config(void)
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
-    Error_Handler(0);
+    Error_Handler();
   }
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK1;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
-    Error_Handler(0);
+    Error_Handler();
   }
 }
 
@@ -379,7 +381,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
   if (HAL_SPI_Init(&hspi1) != HAL_OK)
   {
-    Error_Handler(0);
+    Error_Handler();
   }
   /* USER CODE BEGIN SPI1_Init 2 */
 
@@ -410,7 +412,7 @@ static void MX_TIM14_Init(void)
   htim14.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim14) != HAL_OK)
   {
-    Error_Handler(0);
+    Error_Handler();
   }
   /* USER CODE BEGIN TIM14_Init 2 */
 
@@ -445,7 +447,7 @@ static void MX_USART1_UART_Init(void)
   huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
   if (HAL_UART_Init(&huart1) != HAL_OK)
   {
-    Error_Handler(0);
+    Error_Handler();
   }
   /* USER CODE BEGIN USART1_Init 2 */
 
@@ -558,12 +560,11 @@ static void updateCurrentEffect(void)
   * @brief  This function is executed in case of error occurrence.
   * @retval None
   */
-void Error_Handler(uint32_t color)
+void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-	currentEffect.colors[0] = color;
-	updateCurrentEffect();
+
   /* USER CODE END Error_Handler_Debug */
 }
 

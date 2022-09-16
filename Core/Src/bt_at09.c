@@ -29,7 +29,7 @@ uint8_t isHardwareCheck = 0;
 uint8_t isConfigurationCheck = 0;
 uint8_t configurationStep = 0;
 
-void powerCtrl(uint8_t is_enable)
+static void powerCtrl(uint8_t is_enable)
 {
 	if(is_enable)
 	{
@@ -42,14 +42,15 @@ void powerCtrl(uint8_t is_enable)
 	}
 }
 
-uint8_t isConnected()
+static uint8_t isConnected()
 {
 	is_Connected = ((GPIOA->IDR & GPIO_PIN_4) != 0);
 	return is_Connected;
 }
 
-void bt_init()
+static void bt_init()
 {
+	// reset BT
 	powerCtrl(0);
 	HAL_Delay(10);
 	powerCtrl(1);
@@ -59,7 +60,7 @@ void bt_init()
 	sendCommand("AT\r\n");
 }
 
-void sendCommand(const char* command)
+static void sendCommand(const char* command)
 {
 	HAL_UART_Transmit(&huart1, (uint8_t*)command, strlen(command), 1000);
 }
@@ -73,7 +74,7 @@ void sendCommand(const char* command)
   */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-	if(Size > 0 && strlen((char*)dataBuffer) > 0)
+	if(Size > 0)
 	{
 		if(isHardwareCheck)
 		{
@@ -115,7 +116,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 					else
 					{
 						isConfigurationCheck = 0;
-						Error_Handler(COLOR_PURPLE);
+						Error_Handler();
 					}
 					break;
 
@@ -141,7 +142,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 					else
 					{
 						isConfigurationCheck = 0;
-						Error_Handler(COLOR_OLIVE);
+						Error_Handler();
 					}
 					break;
 
@@ -167,7 +168,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 					else
 					{
 						isConfigurationCheck = 0;
-						Error_Handler(COLOR_WHITE);
+						Error_Handler();
 					}
 					break;
 
@@ -179,12 +180,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 					}
 					else
 					{
-						Error_Handler(COLOR_CYAN);
+						Error_Handler();
 					}
 					break;
 
 				default:
-					Error_Handler(COLOR_BLACK);
+					Error_Handler();
 					break;
 			}
 		}
@@ -193,6 +194,10 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 			commands_queue->Insert(dataBuffer);
 		}
 	}
-	memset(dataBuffer, 0, sizeof(dataBuffer));
+	if(isHardwareCheck || isConfigurationCheck)
+	{
+		memset(dataBuffer, 0, sizeof(dataBuffer));
+	}
+
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dataBuffer, dataReceiveMode ? 19 : sizeof(dataBuffer));
 }

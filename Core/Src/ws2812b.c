@@ -204,6 +204,7 @@ static uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v)
     uint32_t grb;
     uint8_t region, remainder, p, q, t;
     uint16_t rgb_sum = 0;
+    uint16_t temp = 0;
 
     if (s == 0)
     {
@@ -217,12 +218,6 @@ static uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v)
     p = (v * (255 - s)) >> 8;
     q = (v * (255 - ((s * remainder) >> 8))) >> 8;
     t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
-
-    // add LEDs brightness smoothing
-//    rgb_sum = (uint16_t)(p + q + t);
-//    p = (uint8_t)((uint16_t)(p<<8)/rgb_sum);
-//    q = (uint8_t)((uint16_t)(q<<8)/rgb_sum);
-//    t = (uint8_t)((uint16_t)(t<<8)/rgb_sum);
 
     switch (region)
     {
@@ -286,6 +281,16 @@ static uint32_t RgbToHsv(uint32_t grb)
 static void setLedColorInFrameBuffer(uint8_t led_pos, uint32_t grb_color)
 {
 	uint8_t temp = 0;
+
+	// add brightness correction
+	uint8_t g = (grb_color>>16) & 0xFF;
+	uint8_t r = (grb_color>>8) & 0xFF;
+	uint8_t b = grb_color & 0xFF;
+
+	uint16_t g_corr = (uint16_t)g*11/20;
+	g = (uint8_t)(g_corr & 0xFF);
+
+	grb_color = (g<<16)|(r<<8)|b;
 
 	// fill color data array
 	for(uint8_t i = 0; i < 24; i++)

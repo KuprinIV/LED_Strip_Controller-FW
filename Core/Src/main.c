@@ -123,7 +123,6 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM14_Init();
   /* USER CODE BEGIN 2 */
-  HAL_Delay(1000);
   //init BT module
   bt05_drv->Init();
 

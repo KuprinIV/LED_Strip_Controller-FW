@@ -54,6 +54,7 @@ static void bt_init()
 	powerCtrl(0);
 	HAL_Delay(10);
 	powerCtrl(1);
+	HAL_Delay(1000);
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dataBuffer, sizeof(dataBuffer)); // start receive data
 	// check UART communication
 	isHardwareCheck = 1;
@@ -149,7 +150,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 				case 4:
 					if(strstr((char*)dataBuffer, "+PIN=123456"))
 					{
-						sendCommand("AT+RESET\r\n");
 						configurationStep += 2;
 					}
 					else
@@ -162,7 +162,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 				case 5:
 					if(strstr((char*)dataBuffer, "+PIN=123456"))
 					{
-						sendCommand("AT+RESET\r\n");
 						configurationStep++;
 					}
 					else
@@ -173,15 +172,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 					break;
 
 				case 6:
-					if(strstr((char*)dataBuffer, "OK"))
-					{
-						dataReceiveMode = 1;
-						isConfigurationCheck = 0;
-					}
-					else
-					{
-						Error_Handler();
-					}
+					dataReceiveMode = 1;
+					isConfigurationCheck = 0;
 					break;
 
 				default:

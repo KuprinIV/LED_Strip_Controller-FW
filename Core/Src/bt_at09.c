@@ -29,6 +29,11 @@ uint8_t isHardwareCheck = 0;
 uint8_t isConfigurationCheck = 0;
 uint8_t configurationStep = 0;
 
+/**
+  * @brief  Bluetooth module power control
+  * @param  is_enable: 0 - disable module, 1 - enable bluetooth
+  * @retval None
+  */
 static void powerCtrl(uint8_t is_enable)
 {
 	if(is_enable)
@@ -42,12 +47,22 @@ static void powerCtrl(uint8_t is_enable)
 	}
 }
 
+/**
+  * @brief  Get Bluetooth connection state
+  * @param  None
+  * @retval 0 - not connected, 1 - connected
+  */
 static uint8_t isConnected()
 {
 	is_Connected = ((GPIOA->IDR & GPIO_PIN_4) != 0);
 	return is_Connected;
 }
 
+/**
+  * @brief  Bluetooth module initialization
+  * @param  None
+  * @retval None
+  */
 static void bt_init()
 {
 	// reset BT
@@ -61,6 +76,11 @@ static void bt_init()
 	sendCommand("AT\r\n");
 }
 
+/**
+  * @brief  Send AT-command to Bluetooth module
+  * @param  command: AT-command string
+  * @retval None
+  */
 static void sendCommand(const char* command)
 {
 	HAL_UART_Transmit(&huart1, (uint8_t*)command, strlen(command), 1000);
@@ -69,8 +89,6 @@ static void sendCommand(const char* command)
 /**
   * @brief  Rx Transfer completed callback
   * @param  UartHandle: UART handle
-  * @note   This example shows a simple way to report end of DMA Rx transfer, and
-  *         you can add your own implementation.
   * @retval None
   */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)

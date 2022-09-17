@@ -35,6 +35,11 @@ LED_StripDriver* led_strip_drv = &led_drv;
 // init LEDs framebuffer
 uint8_t leds_framebuffer[LEDS_COUNT][24] = {0};
 
+/**
+  * @brief  Set LED strip constant color
+  * @param  grb: 24-bit GRB color value
+  * @retval None
+  */
 static void setStripColor(uint32_t grb)
 {
 	// fill LED framebuffer
@@ -44,6 +49,11 @@ static void setStripColor(uint32_t grb)
 	}
 }
 
+/**
+  * @brief  Set LED strip smooth brightness change
+  * @param  grb: 24-bit GRB color value
+  * @retval None
+  */
 static void setBlinkingStrip(uint32_t grb)
 {
 	static uint8_t index, dir;
@@ -76,11 +86,23 @@ static void setBlinkingStrip(uint32_t grb)
 	}
 }
 
+/**
+  * @brief  Set LED strip color in HSV format
+  * @param  h: hue (0...255)
+  * @param  s: saturation (0...255)
+  * @param	v: value (0...255)
+  * @retval None
+  */
 static void setHSV_StripColor(uint8_t h, uint8_t s, uint8_t v)
 {
 	  setStripColor(HsvToRgb(h, s, v));
 }
 
+/**
+  * @brief  Set LED strip "rainbow" color
+  * @param  value: brightness (0...255)
+  * @retval None
+  */
 static void setHSV_Sequence(uint8_t value)
 {
 	uint32_t temp = 0;
@@ -92,11 +114,22 @@ static void setHSV_Sequence(uint8_t value)
 	}
 }
 
+/**
+  * @brief  Disable LED strip
+  * @param  None
+  * @retval None
+  */
 static void stripPowerOff(void)
 {
 	setStripColor(COLOR_BLACK);
 }
 
+/**
+  * @brief  Set LED strip color for some part with increased brightness (used for "snake" effect)
+  * @param  grb: 24-bit GRB color value
+  * @param	part_length: illuminated LEDs quantity (1...30)
+  * @retval None
+  */
 static void setStripPartColor(uint32_t grb, uint8_t part_length)
 {
 	static uint32_t hsv_color;
@@ -127,6 +160,11 @@ static void setStripPartColor(uint32_t grb, uint8_t part_length)
 	}
 }
 
+/**
+  * @brief  Set LED strip four colors blinking
+  * @param  colors4: four color values array in 24-bit GRB format
+  * @retval None
+  */
 static void setStripFourColor(uint32_t* colors4)
 {
 	// fill LED framebuffer
@@ -136,6 +174,12 @@ static void setStripFourColor(uint32_t* colors4)
 	}
 }
 
+/**
+  * @brief  Set LED strip two colors sections blinking
+  * @param  colors2: two color values array in 24-bit GRB format
+  * @param	part_size: blinking colored section size (1...30)
+  * @retval None
+  */
 static void setStripTwoColor(uint32_t* colors2, uint8_t part_size)
 {
 	uint8_t arrayIndex = 0;
@@ -145,12 +189,17 @@ static void setStripTwoColor(uint32_t* colors2, uint8_t part_size)
 	{
 		if(i > 0 && (i % part_size) == 0)
 		{
-			arrayIndex = (~arrayIndex) & 0x01;
+			arrayIndex ^= 0x01;
 		}
 		setLedColorInFrameBuffer(i, colors2[arrayIndex]);
 	}
 }
 
+/**
+  * @brief  Write framebuffer data into LEDs
+  * @param  index_offset: start index of framebuffer
+  * @retval None
+  */
 static void updateFramebuffer(uint8_t index_offset)
 {
 	// send data to strip LED controllers
@@ -158,7 +207,7 @@ static void updateFramebuffer(uint8_t index_offset)
 	{
 		for(uint8_t i = 0; i < 24; i+=2)
 		{
-			SPI1->DR = (uint16_t)((leds_framebuffer[j][i]<<8)|leds_framebuffer[j][i+1]);
+			SPI1->DR = (uint16_t)((leds_framebuffer[j][i]<<8)|leds_framebuffer[j][i+1]); // write two-bits simultaneously
 			while(!(SPI1->SR & SPI_SR_TXE)){}
 		}
 	}
@@ -166,7 +215,7 @@ static void updateFramebuffer(uint8_t index_offset)
 	{
 		for(uint8_t i = 0; i < 24; i+=2)
 		{
-			SPI1->DR = (uint16_t)((leds_framebuffer[j][i]<<8)|leds_framebuffer[j][i+1]);
+			SPI1->DR = (uint16_t)((leds_framebuffer[j][i]<<8)|leds_framebuffer[j][i+1]); // write two-bits simultaneously
 			while(!(SPI1->SR & SPI_SR_TXE)){}
 		}
 	}
@@ -178,6 +227,13 @@ static void updateFramebuffer(uint8_t index_offset)
 	}
 }
 
+/**
+  * @brief  Convert HSV color format into GRB
+  * @param  h: hue
+  * @param	s: saturation
+  * @param	v: value
+  * @retval 24-bit GRB color value
+  */
 static uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v)
 {
     uint32_t grb;
@@ -221,6 +277,11 @@ static uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v)
     return grb;
 }
 
+/**
+  * @brief  Convert GRB color format into HSV
+  * @param  grb: 24-bit GRB color value
+  * @retval 24-bit HSV value
+  */
 static uint32_t RgbToHsv(uint32_t grb)
 {
     uint8_t grbMin, grbMax;
@@ -255,6 +316,12 @@ static uint32_t RgbToHsv(uint32_t grb)
     return (h<<16)|(s<<8)|v;
 }
 
+/**
+  * @brief  Set LED color in framebuffer
+  * @param  led_pos: LED position in framebuffer
+  * @param 	grb_color: 24-bit GRB color value
+  * @retval None
+  */
 static void setLedColorInFrameBuffer(uint8_t led_pos, uint32_t grb_color)
 {
 	uint8_t temp = 0;

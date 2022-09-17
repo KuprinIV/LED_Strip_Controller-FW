@@ -145,6 +145,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  // handle update event from TIM14
 	  if(isUpdate)
 	  {
 		  isUpdate = 0;
@@ -515,6 +516,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	isUpdate = 1;
 }
 
+/**
+  * @brief  Update LED strip framebuffer for current effect data
+  * @param  None
+  * @retval None
+  */
 static void updateCurrentEffect(void)
 {
 	  switch(currentEffect.effectNum)

@@ -36,28 +36,54 @@ uint8_t itemCount = 0;
 /*
  * command queue realization
  */
+
+/**
+  * @brief  Get value from queue without removing
+  * @param  None
+  * @retval Command data, received via Bluetooth
+  */
 uint8_t* peek()
 {
    return commandsArray[front];
 }
 
+/**
+  * @brief  Check is queue is empty
+  * @param  None
+  * @retval 0 - queue isn't empty, 1 - queue is empty
+  */
 uint8_t isEmpty()
 {
 	uint8_t res = (itemCount == 0) ? 1 : 0;
 	return res;
 }
 
+/**
+  * @brief  Check is queue is full
+  * @param  None
+  * @retval 0 - queue isn't full, 1 - queue is full
+  */
 uint8_t isFull()
 {
 	uint8_t res = (itemCount == OUEUE_DEPTH) ? 1 : 0;
    return res;
 }
 
+/**
+  * @brief  Get queue size
+  * @param  None
+  * @retval Queue length
+  */
 uint8_t size()
 {
    return itemCount;
 }
 
+/**
+  * @brief  Insert value into the queue
+  * @param  Command data, received via Bluetooth
+  * @retval None
+  */
 void insert(uint8_t* data)
 {
 
@@ -74,6 +100,11 @@ void insert(uint8_t* data)
    }
 }
 
+/**
+  * @brief  Get value from queue with removing
+  * @param  None
+  * @retval Command data, received via Bluetooth
+  */
 uint8_t* poll()
 {
    uint8_t* data = commandsArray[front++];

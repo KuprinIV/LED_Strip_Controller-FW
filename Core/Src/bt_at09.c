@@ -10,14 +10,16 @@ extern UART_HandleTypeDef huart1;
 static void bt_init();
 static void powerCtrl(uint8_t is_enable);
 static uint8_t isConnected();
-static void sendCommand(const char* command);
+static void sendResponse(const char* command);
+static void sendData(uint8_t* data, uint8_t len);
 
 // init driver
 BluetoothDriver bt_drv = {
 		bt_init,
 		powerCtrl,
 		isConnected,
-		sendCommand,
+		sendResponse,
+		sendData,
 };
 
 BluetoothDriver* bt05_drv = &bt_drv;
@@ -73,7 +75,7 @@ static void bt_init()
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dataBuffer, sizeof(dataBuffer)); // start receive data
 	// check UART communication
 	isHardwareCheck = 1;
-	sendCommand("AT\r\n");
+	sendResponse("AT\r\n");
 }
 
 /**
@@ -81,9 +83,20 @@ static void bt_init()
   * @param  command: AT-command string
   * @retval None
   */
-static void sendCommand(const char* command)
+static void sendResponse(const char* command)
 {
 	HAL_UART_Transmit(&huart1, (uint8_t*)command, strlen(command), 1000);
+}
+
+/**
+  * @brief  Send data buffer to Bluetooth module
+  * @param  data: data buffer
+  * @param  len: data buffer length
+  * @retval None
+  */
+static void sendData(uint8_t* data, uint8_t len)
+{
+	HAL_UART_Transmit(&huart1, data, len, 1000);
 }
 
 /**
@@ -102,11 +115,11 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 				isHardwareCheck = 0;
 				isConfigurationCheck = 1;
 				configurationStep = 0;
-				sendCommand("AT+ROLE\r\n");
+				sendResponse("AT+ROLE\r\n");
 			}
 			else
 			{
-				sendCommand("AT\r\n");
+				sendResponse("AT\r\n");
 			}
 		}
 		else if(isConfigurationCheck)
@@ -116,12 +129,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 				case 0:
 					if(strstr((char*)dataBuffer, "+ROLE=0"))
 					{
-						sendCommand("AT+NAME\r\n");
+						sendResponse("AT+NAME\r\n");
 						configurationStep += 2;
 					}
 					else
 					{
-						sendCommand("AT+ROLE0\r\n");
+						sendResponse("AT+ROLE0\r\n");
 						configurationStep++;
 					}
 					break;
@@ -129,7 +142,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 				case 1:
 					if(strstr((char*)dataBuffer, "+ROLE=0"))
 					{
-						sendCommand("AT+NAME\r\n");
+						sendResponse("AT+NAME\r\n");
 						configurationStep++;
 					}
 					else
@@ -142,12 +155,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 				case 2:
 					if(strstr((char*)dataBuffer, "+NAME=LED_Strip_BT"))
 					{
-						sendCommand("AT+PIN\r\n");
+						sendResponse("AT+PIN\r\n");
 						configurationStep += 2;
 					}
 					else
 					{
-						sendCommand("AT+NAMELED_Strip_BT\r\n");
+						sendResponse("AT+NAMELED_Strip_BT\r\n");
 						configurationStep++;
 					}
 					break;
@@ -155,7 +168,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 				case 3:
 					if(strstr((char*)dataBuffer, "+NAME=LED_Strip_BT"))
 					{
-						sendCommand("AT+PIN\r\n");
+						sendResponse("AT+PIN\r\n");
 						configurationStep++;
 					}
 					else
@@ -172,7 +185,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 					}
 					else
 					{
-						sendCommand("AT+PIN123456\r\n");
+						sendResponse("AT+PIN123456\r\n");
 						configurationStep++;
 					}
 					break;
@@ -199,7 +212,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 					break;
 			}
 		}
-		else if(dataReceiveMode && Size == 19)
+		else if(dataReceiveMode && Size == CMD_BUF_LEN)
 		{
 			commands_queue->Insert(dataBuffer);
 		}
@@ -209,5 +222,5 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 		memset(dataBuffer, 0, sizeof(dataBuffer));
 	}
 
-	HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dataBuffer, dataReceiveMode ? 19 : sizeof(dataBuffer));
+	HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dataBuffer, dataReceiveMode ? CMD_BUF_LEN : sizeof(dataBuffer));
 }

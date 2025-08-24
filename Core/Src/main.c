@@ -58,11 +58,11 @@ effectParamsData effectsArray[8] = {
 		{0, {0, 0, 0, 0}, 0, 0, 0}, 										// strip power off
 		{1, {COLOR_RED, COLOR_YELLOW, COLOR_LIME, COLOR_BLUE}, 0, 0, 0}, 	// four colors effect
 		{2, {COLOR_RED, COLOR_YELLOW, 0, 0}, 0, 0, 1}, 						// two colors effect
-		{3, {0, 0, 0, 0}, 255, 150, 0}, 									// smooth color change effect
+		{3, {0, 0, 0, 0}, 255, 255, 0}, 									// smooth color change effect
 		{4, {COLOR_WHITE, 0, 0, 0}, 0, 0, 0}, 								// constant color effect
 		{5, {COLOR_WHITE, 0, 0, 0}, 0, 0, 0}, 								// blinking color effect
 		{6, {COLOR_WHITE, 0, 0, 0}, 0, 0, 15},								// shift color part effect
-		{7, {0, 0, 0, 0}, 255, 150, 0}										// rainbow effect
+		{7, {0, 0, 0, 0}, 255, 255, 0}										// rainbow effect
 };
 
 effectParamsData currentEffect;
@@ -231,6 +231,35 @@ int main(void)
 				  updateCurrentEffect();
 				  needToUpdate = 1;
 			  }
+			  else if(strstr((char*)commandData, "Get effect"))
+			  {
+				  // clear buffer
+				  memset(commandData, 0, DATA_SIZE);
+
+				  // fill buffer by current effect parameters
+				  commandData[0] = 0xAA;
+				  commandData[1] = currentEffect.effectNum;
+				  commandData[2] = (uint8_t)((currentEffect.colors[0]>>16) & 0x000000FF);
+				  commandData[3] = (uint8_t)((currentEffect.colors[0]>>8) & 0x000000FF);
+				  commandData[4] = (uint8_t)(currentEffect.colors[0] & 0x000000FF);
+				  commandData[5] = (uint8_t)((currentEffect.colors[1]>>16) & 0x000000FF);
+				  commandData[6] = (uint8_t)((currentEffect.colors[1]>>8) & 0x000000FF);
+				  commandData[7] = (uint8_t)(currentEffect.colors[1] & 0x000000FF);
+				  commandData[8] = (uint8_t)((currentEffect.colors[2]>>16) & 0x000000FF);
+				  commandData[9] = (uint8_t)((currentEffect.colors[2]>>8) & 0x000000FF);
+				  commandData[10] = (uint8_t)(currentEffect.colors[2] & 0x000000FF);
+				  commandData[11] = (uint8_t)((currentEffect.colors[3]>>16) & 0x000000FF);
+				  commandData[12] = (uint8_t)((currentEffect.colors[3]>>8) & 0x000000FF);
+				  commandData[13] = (uint8_t)(currentEffect.colors[3] & 0x000000FF);
+				  commandData[14] = currentEffect.saturation;
+				  commandData[15] = currentEffect.value;
+				  commandData[16] = currentEffect.sectorSize;
+				  commandData[17] = 0x0D;
+				  commandData[18] = 0x0A;
+
+				  // send data
+				  bt05_drv->SendData(commandData, CMD_BUF_LEN);
+			  }
 		  }
 		  // check update
 		  if(!isDeviceBusy)
@@ -258,7 +287,9 @@ int main(void)
 					  break;
 
 				  case 2: // two color blinking
-					  shiftOffset = ((shiftOffset + 1) & 0x01)*currentEffect.sectorSize;
+					  shiftOffset += currentEffect.sectorSize;
+					  if(shiftOffset > currentEffect.sectorSize)
+						  shiftOffset = 0;
 					  break;
 
 				  case 3: // smooth color changing
@@ -300,7 +331,7 @@ int main(void)
 			  {
 				  isDeviceBusy = 0;
 				  clockCounter = 0;
-				  bt05_drv->SendCommand("Effect set");
+				  bt05_drv->SendResponse("Effect set");
 			  }
 		  }
 	  }
